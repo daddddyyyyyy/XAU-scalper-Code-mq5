@@ -658,6 +658,13 @@ function eaIn(c,id,live){plog('<i>EA ▸ backend</i> '+esc(c.name)+' bal '+f(liv
 
 /* ---------- admin-only OneSignal web push ---------- */
 const TG_ONESIGNAL_APP_ID='3ae8080d-dd7a-49f6-9a52-a69325e48018';
+const TG_PUSH_URL='https://tg-push-notifier.topgearsolutions.workers.dev';
+async function tgPushApi(path,body){
+  const r=await fetch(TG_PUSH_URL+path,{method:'POST',headers:{Authorization:'Bearer '+cfg.token,'content-type':'application/json'},body:JSON.stringify(body)});
+  let data={};try{data=await r.json()}catch(e){}
+  if(!r.ok)throw new Error(data.error||'Push service HTTP '+r.status);
+  return data;
+}
 let tgOneSignalPromise=null;
 function getTGOneSignal(){
   if(window.__tgOneSignal)return Promise.resolve(window.__tgOneSignal);
@@ -701,13 +708,13 @@ async function saveTGPushSubscription(OneSignal){
     });
   }
   if(!sid)throw new Error('Could not obtain the OneSignal subscription ID.');
-  await api('/admin/push-subscription',{subscription_id:sid,user_agent:navigator.userAgent});
+  await tgPushApi('/register',{subscription_id:sid,user_agent:navigator.userAgent});
   return sid;
 }
 async function syncTGPushButton(){
   try{
     const OS=await getTGOneSignal(),sub=OS.User.PushSubscription;
-    if(sub.id&&sub.optedIn){await api('/admin/push-subscription',{subscription_id:sub.id,user_agent:navigator.userAgent});$('#pushBtn span').textContent='PUSH ON'}
+    if(sub.id&&sub.optedIn){await tgPushApi('/register',{subscription_id:sub.id,user_agent:navigator.userAgent});$('#pushBtn span').textContent='PUSH ON'}
     else $('#pushBtn span').textContent='ENABLE PUSH';
   }catch(e){$('#pushBtn span').textContent='ENABLE PUSH'}
 }
@@ -719,7 +726,7 @@ async function toggleTGPush(){
     const OS=await getTGOneSignal(),sub=OS.User.PushSubscription;
     if(sub.optedIn&&sub.id){
       await sub.optOut();
-      await api('/admin/push-subscription',{action:'remove',subscription_id:sub.id});
+      await tgPushApi('/unregister',{subscription_id:sub.id});
       label.textContent='ENABLE PUSH';
       toast('Payment alerts disabled on this device');
     }else{
