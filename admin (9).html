@@ -461,7 +461,6 @@ s.addEventListener('click',done);setTimeout(done,4500);})();</script>
   <div class="cell h hide-s" id="stCell"><i class="dot" id="nd"></i><span id="nt">connecting</span><span class="m" id="pg">-- ms</span></div>
   <button class="cell" id="motionBtn"><i class="dot live"></i><span>MOTION ON</span></button>
   <button class="cell" id="themeBtn"><span>LIGHT</span></button>
-  <button class="cell h" id="pushBtn" type="button"><span>ENABLE PUSH</span></button>
   <button class="cell h" id="bo"><span>LOG OUT ↗</span></button>
 </header>
 
@@ -655,101 +654,13 @@ function eaIn(c,id,live){plog('<i>EA ▸ backend</i> '+esc(c.name)+' bal '+f(liv
   const sc=id==='ea'?s2:s1;sc.send(id,'core',1,()=>{plog('<u>backend ▸ EA</u> '+esc(c.name)+' answer: '+esc(live.last_state||c.status));sc.send('core',id,.55)})}
 
 /* ---------- login / poll ---------- */
-
-/* ---------- admin-only OneSignal web push ---------- */
-const TG_ONESIGNAL_APP_ID='3ae8080d-dd7a-49f6-9a52-a69325e48018';
-const TG_PUSH_URL='https://tg-push-notifier.topgearsolutions.workers.dev';
-async function tgPushApi(path,body){
-  const r=await fetch(TG_PUSH_URL+path,{method:'POST',headers:{Authorization:'Bearer '+cfg.token,'content-type':'application/json'},body:JSON.stringify(body)});
-  let data={};try{data=await r.json()}catch(e){}
-  if(!r.ok)throw new Error(data.error||'Push service HTTP '+r.status);
-  return data;
-}
-let tgOneSignalPromise=null;
-function getTGOneSignal(){
-  if(window.__tgOneSignal)return Promise.resolve(window.__tgOneSignal);
-  if(tgOneSignalPromise)return tgOneSignalPromise;
-  tgOneSignalPromise=new Promise((resolve,reject)=>{
-    window.OneSignalDeferred=window.OneSignalDeferred||[];
-    window.OneSignalDeferred.push(async function(OneSignal){
-      try{
-        await OneSignal.init({
-          appId:TG_ONESIGNAL_APP_ID,
-          serviceWorkerPath:'/OneSignalSDKWorker.js',
-          serviceWorkerParam:{scope:'/'}
-        });
-        window.__tgOneSignal=OneSignal;
-        resolve(OneSignal);
-      }catch(e){reject(e)}
-    });
-    const script=document.createElement('script');
-    script.src='https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
-    script.defer=true;
-    script.onerror=()=>reject(new Error('OneSignal SDK could not load. Check the internet connection and OneSignal setup.'));
-    document.head.appendChild(script);
-  });
-  return tgOneSignalPromise;
-}
-async function saveTGPushSubscription(OneSignal){
-  const sub=OneSignal.User.PushSubscription;
-  let sid=sub.id;
-  if(!sid){
-    sid=await new Promise((resolve,reject)=>{
-      let done=false;
-      const finish=(value,error)=>{
-        if(done)return;done=true;clearTimeout(timeout);
-        sub.removeEventListener('change',changed);
-        error?reject(error):resolve(value);
-      };
-      const changed=()=>{if(sub.id)finish(sub.id)};
-      const timeout=setTimeout(()=>finish(null,new Error('Push subscription is still being created. Please try again in a few seconds.')),15000);
-      sub.addEventListener('change',changed);
-      changed();
-    });
-  }
-  if(!sid)throw new Error('Could not obtain the OneSignal subscription ID.');
-  await tgPushApi('/register',{subscription_id:sid,user_agent:navigator.userAgent});
-  return sid;
-}
-async function syncTGPushButton(){
-  try{
-    const OS=await getTGOneSignal(),sub=OS.User.PushSubscription;
-    if(sub.id&&sub.optedIn){await tgPushApi('/register',{subscription_id:sub.id,user_agent:navigator.userAgent});$('#pushBtn span').textContent='PUSH ON'}
-    else $('#pushBtn span').textContent='ENABLE PUSH';
-  }catch(e){$('#pushBtn span').textContent='ENABLE PUSH'}
-}
-async function toggleTGPush(){
-  const btn=$('#pushBtn'),label=btn.querySelector('span');
-  if(!cfg.token){toast('Sign in first');return}
-  btn.disabled=true;
-  try{
-    const OS=await getTGOneSignal(),sub=OS.User.PushSubscription;
-    if(sub.optedIn&&sub.id){
-      await sub.optOut();
-      await tgPushApi('/unregister',{subscription_id:sub.id});
-      label.textContent='ENABLE PUSH';
-      toast('Payment alerts disabled on this device');
-    }else{
-      const granted=await OS.Notifications.requestPermission();
-      if(!granted)throw new Error('Notification permission was not granted. Allow notifications for this site in Chrome settings.');
-      await sub.optIn();
-      await saveTGPushSubscription(OS);
-      label.textContent='PUSH ON';
-      toast('Payment alerts enabled on this device');
-    }
-  }catch(e){toast(e&&e.message?e.message:'Could not configure push notifications');label.textContent='ENABLE PUSH'}
-  finally{btn.disabled=false}
-}
-$('#pushBtn').onclick=toggleTGPush;
-/* ---------- end OneSignal ---------- */
-
-function show(w){$('#lv').classList.toggle('h',w!=='lv');const av=$('#av');av.classList.toggle('h',w!=='av');av.style.display=w==='av'?'flex':'';$('#stCell').classList.toggle('h',w!=='av');$('#bo').classList.toggle('h',w!=='av');$('#pushBtn').classList.toggle('h',w!=='av');if(w==='av'){av.classList.remove('enter');void av.offsetWidth;if(motion)av.classList.add('enter');window.scrollTo(0,0)}}
+function show(w){$('#lv').classList.toggle('h',w!=='lv');const av=$('#av');av.classList.toggle('h',w!=='av');av.style.display=w==='av'?'flex':'';$('#stCell').classList.toggle('h',w!=='av');$('#bo').classList.toggle('h',w!=='av');if(w==='av'){av.classList.remove('enter');void av.offsetWidth;if(motion)av.classList.add('enter');window.scrollTo(0,0)}}
 function out(m){clearTimeout(timer);cfg.token='';try{localStorage.removeItem('tg_pw')}catch(e){}$('#rm').checked=false;show('lv');$('#le').textContent=m||''}
 async function connect(auto){
   if(!auto)cfg.token=$('#it').value.trim();
   if(!cfg.token){$('#le').textContent='Enter your password';return}
   $('#le').textContent=auto?'Signing in…':'Connecting…';
-  try{await api('/admin/snapshot');try{if($('#rm').checked)localStorage.setItem('tg_pw',cfg.token);else localStorage.removeItem('tg_pw')}catch(e){}$('#it').value='';$('#le').textContent='';show('av');S.sel=null;S.view='dash';syncTGPushButton();tick()}
+  try{await api('/admin/snapshot');try{if($('#rm').checked)localStorage.setItem('tg_pw',cfg.token);else localStorage.removeItem('tg_pw')}catch(e){}$('#it').value='';$('#le').textContent='';show('av');S.sel=null;S.view='dash';tick()}
   catch(e){if(e.message!=='unauthorized')$('#le').textContent='Cannot reach the server: '+e.message}
 }
 $('#bl').onclick=()=>connect(false);
